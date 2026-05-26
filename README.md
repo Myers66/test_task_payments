@@ -26,5 +26,5 @@
 
 1. **Клонировать репозиторий**
    ```bash
-   git clone https://github.com/ваш_username/название_репозитория.git
-   cd название_репозитория
+   git clone https://github.com/Myers66/test_task_payments.git
+   cd test_task_payments
