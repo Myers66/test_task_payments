@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Анализ платежей — тестовое задание</title>
+    <!-- Подключаем Bootstrap 5 для красивой кнопки и адаптивности (необязательно, но приятно) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Подключаем библиотеку Chart.js для построения графиков -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        /* Небольшие стили, чтобы график не упирался в края */
+        .chart-container {
+            max-width: 1000px;
+            margin: 2rem auto;
+            padding: 1rem;
+        }
+        canvas {
+            max-height: 500px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container text-center mt-4">
+        <h1>Визуализация платежей</h1>
+        <!-- Кнопка для переключения между линейным графиком и гистограммой -->
+        <button id="toggleChartBtn" class="btn btn-primary mt-3 mb-3">Показать гистограмму</button>
+        <div class="chart-container">
+            <!-- Здесь Chart.js нарисует график -->
+            <canvas id="mainChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // Переменные, которые будут хранить данные и текущий график
+        let mainChart = null;
+        let currentChartType = 'line'; // 'line' или 'bar'
+        let lineData = [];   // массив для данных линейного графика: {date, amount}
+        let barData = [];    // массив для гистограммы: {client_name, total_amount}
+
+        // Функция загрузки данных из API, которое мы создали в views.py
+        async function fetchData() {
+            try {
+                const response = await fetch('/api/data/');
+                if (!response.ok) throw new Error('Ошибка загрузки данных');
+                const data = await response.json();
+                lineData = data.line_data;
+                barData = data.bar_data;
+                // После загрузки рисуем линейный график по умолчанию
+                renderChart('line');
+            } catch (error) {
+                console.error('Ошибка:', error);
+                // Покажем сообщение на странице, если данные не загрузились
+                document.getElementById('mainChart').insertAdjacentHTML(
+                    'afterend',
+                    '<div class="alert alert-danger">Не удалось загрузить данные. Проверьте работу сервера.</div>'
+                );
+            }
+        }
+
+        // Основная функция отрисовки графика в зависимости от типа
+        function renderChart(type) {
+            if (mainChart) {
+                mainChart.destroy();  // удаляем старый график, чтобы не накладывался
+            }
+
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            let chartConfig = {};
+
+            if (type === 'line') {
+                // Готовим данные для линейного графика: дата на оси X, сумма на Y
+                const labels = lineData.map(item => new Date(item.date).toLocaleDateString('ru-RU'));
+                const amounts = lineData.map(item => item.amount);
+
+                chartConfig = {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Сумма платежа, руб',
+                            data: amounts,
+                            borderColor: 'rgb(75, 192, 192)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            tension: 0.1,          // небольшая сглаживание линии
+                            fill: true,
+                            pointRadius: 5,
+                            pointHoverRadius: 7
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => `${context.raw} руб`
+                                }
+                            },
+                            legend: { position: 'top' }
+                        },
+                        scales: {
+                            y: {
+                                title: { display: true, text: 'Сумма (руб)' },
+                                beginAtZero: true
+                            },
+                            x: {
+                                title: { display: true, text: 'Дата платежа' }
+                            }
+                        }
+                    }
+                };
+            }
+            else if (type === 'bar') {
+                // Готовим данные для гистограммы: имя клиента и общая сумма его платежей
+                const labels = barData.map(item => item.client_name);
+                const totals = barData.map(item => item.total_amount);
+
+                chartConfig = {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Общая сумма платежей, руб',
+                            data: totals,
+                            backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                            borderColor: 'rgb(54, 162, 235)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => `${context.raw} руб`
+                                }
+                            },
+                            legend: { position: 'top' }
+                        },
+                        scales: {
+                            y: {
+                                title: { display: true, text: 'Сумма (руб)' },
+                                beginAtZero: true
+                            },
+                            x: {
+                                title: { display: true, text: 'Плательщик' },
+                                ticks: { autoSkip: false, rotation: 45 } // под наклоном, если имён много
+                            }
+                        }
+                    }
+                };
+            }
+
+            // Создаём новый график
+            mainChart = new Chart(ctx, chartConfig);
+            currentChartType = type;
+        }
+
+        // Обработчик клика по кнопке
+        document.getElementById('toggleChartBtn').addEventListener('click', () => {
+            if (currentChartType === 'line') {
+                renderChart('bar');
+                document.getElementById('toggleChartBtn').textContent = 'Показать линейный график';
+            } else {
+                renderChart('line');
+                document.getElementById('toggleChartBtn').textContent = 'Показать гистограмму';
+            }
+        });
+
+        // Запускаем загрузку данных при загрузке страницы
+        fetchData();
+    </script>
+</body>
+</html>
